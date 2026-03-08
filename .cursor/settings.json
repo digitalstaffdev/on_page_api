@@ -1,0 +1,6 @@
+{
+  "project": "on_page_api",
+  "description": "On-Page Optimization Agent — API Layer (Next.js Route Handlers + Prisma + Auth.js + Inngest)",
+  "deployTarget": "Vercel",
+  "relatedRepos": ["on_page_ui", "on_page_db"]
+}

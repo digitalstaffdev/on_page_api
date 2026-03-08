@@ -1,0 +1,36 @@
+{
+  "name": "on-page-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "14.2.21",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@prisma/client": "^6.4.1",
+    "next-auth": "^5.0.0-beta.25",
+    "@auth/prisma-adapter": "^2.8.0",
+    "bcryptjs": "^2.4.3",
+    "stripe": "^17.5.0",
+    "anthropic": "^0.39.0",
+    "@google/generative-ai": "^0.21.0",
+    "inngest": "^3.30.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/bcryptjs": "^2.4.6",
+    "typescript": "^5.7.2",
+    "prisma": "^6.4.1",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "14.2.21"
+  }
+}
