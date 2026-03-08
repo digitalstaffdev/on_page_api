@@ -1,0 +1,638 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum UserTier {
+  free
+  pro
+  agency
+}
+
+enum ProjectStatus {
+  profiling
+  discovering
+  extracting
+  ready
+  analyzing
+  complete
+  failed
+}
+
+enum AnalysisStatus {
+  pending
+  analyzing
+  complete
+  failed
+}
+
+enum RewriteMode {
+  meta
+  sections
+  full_restructure
+  new_page
+}
+
+// ─── Core Models ────────────────────────────────────────────────────────────
+
+model User {
+  id                     String    @id @default(uuid()) @db.Uuid
+  email                  String    @unique @db.VarChar(320)
+  name                   String?   @db.VarChar(255)
+  hashed_password        String?   @db.VarChar(255)
+  google_id              String?   @unique @db.VarChar(255)
+  avatar_url             String?   @db.VarChar(500)
+  is_active              Boolean   @default(true)
+  is_verified            Boolean   @default(false)
+  is_admin               Boolean   @default(false)
+  tier                   UserTier  @default(free)
+  stripe_customer_id     String?   @db.VarChar(255)
+  stripe_subscription_id String?   @db.VarChar(255)
+  analyses_this_month    Int       @default(0)
+  billing_period_start   DateTime?
+  created_at             DateTime  @default(now())
+  last_login             DateTime?
+
+  projects Project[]
+  apiKeys  UserApiKey[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Project {
+  id            String        @id @default(uuid()) @db.Uuid
+  user_id       String?       @db.Uuid
+  target_url    String
+  target_domain String        @db.VarChar(255)
+  status        ProjectStatus @default(profiling)
+  progress_pct  Int           @default(0)
+  site_profile  Json?
+  site_summary  Json?
+  created_at    DateTime      @default(now())
+  completed_at  DateTime?
+
+  user         User?          @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  competitors  Competitor[]
+  keywords     Keyword[]
+  pageContents PageContent[]
+  reports      ProjectReport[]
+
+  keywordDifficultyReports     KeywordDifficultyReport[]
+  rankSnapshots                RankSnapshot[]
+  rankTrackingReports          RankTrackingReport[]
+  domainAuthorityReports       DomainAuthorityReport[]
+  contentPerformanceReports    ContentPerformanceReport[]
+  topicResearchReports         TopicResearchReport[]
+  pageSpeedReports             PageSpeedReport[]
+  serpPreviewReports           SerpPreviewReport[]
+  internalLinkReports          InternalLinkReport[]
+  siteAuditReports             SiteAuditReport[]
+  backlinkReports              BacklinkReport[]
+  keywordGapReports            KeywordGapReport[]
+  contentGapReports            ContentGapReport[]
+  longTailKeywordReports       LongTailKeywordReport[]
+  anchorTextAnalysisReports    AnchorTextAnalysisReport[]
+  serpFeatureAnalysisReports   SerpFeatureAnalysisReport[]
+  aiSuggestedKeywordsReports   AISuggestedKeywordsReport[]
+  competitorKeywordDiscoveries CompetitorKeywordDiscovery[]
+
+  @@index([user_id])
+  @@map("projects")
+}
+
+model Competitor {
+  id              String   @id @default(uuid()) @db.Uuid
+  project_id      String   @db.Uuid
+  rank            Int
+  domain          String   @db.VarChar(255)
+  competitor_type String   @default("direct") @db.VarChar(50)
+  relevance_score Float    @default(0.0)
+  keywords_overlap Json?
+  notes           String?
+  is_user_added   Boolean  @default(false)
+  discovered_at   DateTime @default(now())
+
+  project            Project                      @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  keywordDiscoveries CompetitorKeywordDiscovery[]
+
+  @@index([project_id])
+  @@map("competitors")
+}
+
+model Keyword {
+  id                 String         @id @default(uuid()) @db.Uuid
+  project_id         String         @db.Uuid
+  rank               Int
+  keyword            String         @db.VarChar(500)
+  cluster            String?        @db.VarChar(255)
+  search_intent      String?        @db.VarChar(50)
+  search_volume      Int?
+  difficulty         Int?
+  opportunity_score  Float?
+  target_current_rank Int?
+  blog_html          String?
+  pillar_html        String?
+  analysis_status    AnalysisStatus @default(pending)
+  created_at         DateTime       @default(now())
+
+  project              Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  serpResults           SerpResult[]
+  quantitativeReports  QuantitativeReport[]
+  semanticReports      SemanticReport[]
+  rewrites             Rewrite[]
+  keywordMappings      PageKeywordMap[]
+  keywordDifficultyReports KeywordDifficultyReport[]
+  rankSnapshots        RankSnapshot[]
+
+  @@index([project_id])
+  @@map("keywords")
+}
+
+model SerpResult {
+  id         String   @id @default(uuid()) @db.Uuid
+  keyword_id String   @db.Uuid
+  rank       Int
+  url        String
+  title      String
+  snippet    String?
+  domain     String   @db.VarChar(255)
+  fetched_at DateTime @default(now())
+
+  keyword Keyword @relation(fields: [keyword_id], references: [id], onDelete: Cascade)
+
+  @@index([keyword_id])
+  @@map("serp_results")
+}
+
+model PageContent {
+  id             String   @id @default(uuid()) @db.Uuid
+  project_id     String   @db.Uuid
+  url            String   @unique
+  domain         String   @db.VarChar(255)
+  is_target      Boolean  @default(false)
+  title          String?
+  meta_desc      String?
+  body_text      String?
+  word_count     Int?
+  headings       Json?
+  links_internal Int?
+  links_external Int?
+  images         Json?
+  schema_types   Json?
+  load_time_ms   Int?
+  scraped_at     DateTime @default(now())
+  scrape_method  String?  @db.VarChar(50)
+
+  project         Project          @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  keywordMappings PageKeywordMap[]
+
+  @@index([project_id])
+  @@map("page_contents")
+}
+
+model PageKeywordMap {
+  page_id    String @db.Uuid
+  keyword_id String @db.Uuid
+  serp_rank  Int?
+
+  page    PageContent @relation(fields: [page_id], references: [id], onDelete: Cascade)
+  keyword Keyword     @relation(fields: [keyword_id], references: [id], onDelete: Cascade)
+
+  @@id([page_id, keyword_id])
+  @@index([page_id])
+  @@index([keyword_id])
+  @@map("page_keyword_map")
+}
+
+model QuantitativeReport {
+  id         String   @id @default(uuid()) @db.Uuid
+  keyword_id String   @db.Uuid
+  metrics    Json?
+  created_at DateTime @default(now())
+
+  keyword Keyword @relation(fields: [keyword_id], references: [id], onDelete: Cascade)
+
+  @@index([keyword_id])
+  @@map("quantitative_reports")
+}
+
+model SemanticReport {
+  id               String   @id @default(uuid()) @db.Uuid
+  keyword_id       String   @db.Uuid
+  search_intent    Json?
+  topical_gaps     Json?
+  content_depth    Json?
+  structure        Json?
+  overall_score    Int?
+  priorities       Json?
+  estimated_effort String?  @db.VarChar(50)
+  created_at       DateTime @default(now())
+
+  keyword Keyword @relation(fields: [keyword_id], references: [id], onDelete: Cascade)
+
+  @@index([keyword_id])
+  @@map("semantic_reports")
+}
+
+model Rewrite {
+  id           String      @id @default(uuid()) @db.Uuid
+  keyword_id   String      @db.Uuid
+  rewrite_mode RewriteMode
+  suggestions  Json?
+  created_at   DateTime    @default(now())
+
+  keyword Keyword @relation(fields: [keyword_id], references: [id], onDelete: Cascade)
+
+  @@index([keyword_id])
+  @@map("rewrites")
+}
+
+model AppSetting {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique @db.VarChar(255)
+  value       String   @default("")
+  is_secret   Boolean  @default(true)
+  description String?
+  updated_at  DateTime @default(now()) @updatedAt
+
+  @@index([key])
+  @@map("app_settings")
+}
+
+model UserApiKey {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  key_name   String   @db.VarChar(100)
+  key_value  String
+  is_active  Boolean  @default(true)
+  updated_at DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("user_api_keys")
+}
+
+model ProjectReport {
+  id              String   @id @default(uuid()) @db.Uuid
+  project_id      String   @db.Uuid
+  title           String   @db.VarChar(500)
+  report_type     String   @default("deep_analysis") @db.VarChar(50)
+  file_name       String   @db.VarChar(500)
+  file_size_bytes Int      @default(0)
+  pdf_data        Bytes
+  created_at      DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("project_reports")
+}
+
+// ─── Advanced Report Models ─────────────────────────────────────────────────
+
+model KeywordDifficultyReport {
+  id               String   @id @default(uuid()) @db.Uuid
+  project_id       String   @db.Uuid
+  keyword_id       String?  @db.Uuid
+  keyword_text     String   @db.VarChar(500)
+  difficulty_score Int      @default(0)
+  difficulty_label String?  @db.VarChar(50)
+  breakdown        Json?
+  serp_competitors Json?
+  recommendations  Json?
+  created_at       DateTime @default(now())
+
+  project Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  keyword Keyword? @relation(fields: [keyword_id], references: [id], onDelete: SetNull)
+
+  @@index([project_id])
+  @@index([keyword_id])
+  @@map("keyword_difficulty_reports")
+}
+
+model RankSnapshot {
+  id            String   @id @default(uuid()) @db.Uuid
+  project_id    String   @db.Uuid
+  keyword_id    String?  @db.Uuid
+  keyword_text  String   @db.VarChar(500)
+  position      Int      @default(0)
+  url           String?
+  serp_features Json?
+  checked_at    DateTime @default(now())
+
+  project Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  keyword Keyword? @relation(fields: [keyword_id], references: [id], onDelete: SetNull)
+
+  @@index([project_id])
+  @@index([keyword_id])
+  @@map("rank_snapshots")
+}
+
+model RankTrackingReport {
+  id                String   @id @default(uuid()) @db.Uuid
+  project_id        String   @db.Uuid
+  visibility_score  Float    @default(0)
+  visibility_change Float    @default(0)
+  positions_data    Json?
+  changes_data      Json?
+  created_at        DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("rank_tracking_reports")
+}
+
+model DomainAuthorityReport {
+  id              String   @id @default(uuid()) @db.Uuid
+  project_id      String   @db.Uuid
+  domain          String   @db.VarChar(255)
+  authority_score Int      @default(0)
+  authority_label String?  @db.VarChar(50)
+  signals         Json?
+  breakdown       Json?
+  recommendations Json?
+  created_at      DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("domain_authority_reports")
+}
+
+model ContentPerformanceReport {
+  id                String   @id @default(uuid()) @db.Uuid
+  project_id        String   @db.Uuid
+  url               String
+  target_keyword    String?  @db.VarChar(500)
+  overall_score     Int      @default(0)
+  grade             String?  @db.VarChar(10)
+  quality_score     Float    @default(0)
+  seo_score         Float    @default(0)
+  readability_score Float    @default(0)
+  engagement_score  Float    @default(0)
+  details           Json?
+  recommendations   Json?
+  created_at        DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("content_performance_reports")
+}
+
+model TopicResearchReport {
+  id               String   @id @default(uuid()) @db.Uuid
+  project_id       String   @db.Uuid
+  seed_keyword     String   @db.VarChar(500)
+  niche            String?  @db.VarChar(255)
+  total_ideas      Int      @default(0)
+  content_ideas    Json?
+  topic_clusters   Json?
+  content_calendar Json?
+  questions        Json?
+  created_at       DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("topic_research_reports")
+}
+
+model PageSpeedReport {
+  id                String   @id @default(uuid()) @db.Uuid
+  project_id        String   @db.Uuid
+  url               String
+  performance_score Int      @default(0)
+  performance_label String?  @db.VarChar(50)
+  ttfb_ms           Float    @default(0)
+  core_web_vitals   Json?
+  resources         Json?
+  image_analysis    Json?
+  mobile_analysis   Json?
+  recommendations   Json?
+  created_at        DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("page_speed_reports")
+}
+
+model SerpPreviewReport {
+  id                       String   @id @default(uuid()) @db.Uuid
+  project_id               String   @db.Uuid
+  url                      String
+  target_keyword           String?  @db.VarChar(500)
+  readiness_score          Int      @default(0)
+  grade                    String?  @db.VarChar(10)
+  desktop_snippet          Json?
+  mobile_snippet           Json?
+  rich_snippet             Json?
+  title_optimization       Json?
+  description_optimization Json?
+  ctr_estimate             Json?
+  recommendations          Json?
+  created_at               DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("serp_preview_reports")
+}
+
+model InternalLinkReport {
+  id                   String   @id @default(uuid()) @db.Uuid
+  project_id           String   @db.Uuid
+  pages_crawled        Int      @default(0)
+  total_internal_links Int      @default(0)
+  orphan_pages         Json?
+  deep_pages           Json?
+  opportunities        Json?
+  anchor_analysis      Json?
+  recommendations      Json?
+  created_at           DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("internal_link_reports")
+}
+
+model SiteAuditReport {
+  id              String   @id @default(uuid()) @db.Uuid
+  project_id      String   @db.Uuid
+  pages_audited   Int      @default(0)
+  health_score    Int      @default(0)
+  errors_count    Int      @default(0)
+  warnings_count  Int      @default(0)
+  issues          Json?
+  categories      Json?
+  recommendations Json?
+  created_at      DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("site_audit_reports")
+}
+
+model BacklinkReport {
+  id                  String   @id @default(uuid()) @db.Uuid
+  project_id          String   @db.Uuid
+  domain              String   @db.VarChar(255)
+  total_backlinks     Int      @default(0)
+  referring_domains   Int      @default(0)
+  backlinks_data      Json?
+  anchor_distribution Json?
+  recommendations     Json?
+  created_at          DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("backlink_reports")
+}
+
+model KeywordGapReport {
+  id                 String   @id @default(uuid()) @db.Uuid
+  project_id         String   @db.Uuid
+  target_domain      String   @db.VarChar(255)
+  competitor_domains Json?
+  shared_keywords    Json?
+  missing_keywords   Json?
+  unique_keywords    Json?
+  opportunities      Json?
+  created_at         DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("keyword_gap_reports")
+}
+
+model ContentGapReport {
+  id               String   @id @default(uuid()) @db.Uuid
+  project_id       String   @db.Uuid
+  target_domain    String   @db.VarChar(255)
+  total_gaps_found Int      @default(0)
+  content_gaps     Json?
+  topic_gaps       Json?
+  recommendations  Json?
+  created_at       DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("content_gap_reports")
+}
+
+model LongTailKeywordReport {
+  id                        String   @id @default(uuid()) @db.Uuid
+  project_id                String   @db.Uuid
+  target_domain             String   @db.VarChar(255)
+  total_pages_crawled       Int      @default(0)
+  total_seeds_discovered    Int      @default(0)
+  total_long_tail_keywords  Int      @default(0)
+  website_profile           Json?
+  site_purpose_analysis     Json?
+  seed_keywords             Json?
+  long_tail_keywords        Json?
+  topic_clusters            Json?
+  content_briefs            Json?
+  competitive_gaps          Json?
+  executive_summary         String?
+  quick_wins                Json?
+  tier_counts               Json?
+  created_at                DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("long_tail_keyword_reports")
+}
+
+model AnchorTextAnalysisReport {
+  id                   String   @id @default(uuid()) @db.Uuid
+  project_id           String   @db.Uuid
+  domain               String   @db.VarChar(255)
+  diversity_score      Float    @default(0.0)
+  total_links_analyzed Int      @default(0)
+  top_anchors          Json?
+  anchor_distribution  Json?
+  recommendations      Json?
+  created_at           DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("anchor_text_analysis_reports")
+}
+
+model SerpFeatureAnalysisReport {
+  id                             String   @id @default(uuid()) @db.Uuid
+  project_id                     String   @db.Uuid
+  keywords_analyzed              Int      @default(0)
+  featured_snippet_opportunities Int      @default(0)
+  paa_opportunities              Int      @default(0)
+  feature_details                Json?
+  top_opportunities              Json?
+  created_at                     DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("serp_feature_analysis_reports")
+}
+
+model AISuggestedKeywordsReport {
+  id                       String   @id @default(uuid()) @db.Uuid
+  project_id               String   @db.Uuid
+  domain                   String   @db.VarChar(255)
+  total_suggested_keywords Int      @default(0)
+  total_suggested_long_tail Int     @default(0)
+  suggested_keywords       Json?
+  suggested_long_tail      Json?
+  serp_landscape           Json?
+  difficulty_analysis      Json?
+  strategy_summary         String?
+  recommendations          Json?
+  created_at               DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@map("ai_suggested_keywords_reports")
+}
+
+model CompetitorKeywordDiscovery {
+  id                String   @id @default(uuid()) @db.Uuid
+  project_id        String   @db.Uuid
+  competitor_id     String   @db.Uuid
+  competitor_domain String   @db.VarChar(255)
+  pages_crawled     Int      @default(0)
+  keywords          Json?
+  total_keywords    Int      @default(0)
+  overlap_keywords  Json?
+  total_overlap     Int      @default(0)
+  analysis_summary  String?
+  status            String   @default("pending") @db.VarChar(20)
+  error_message     String?
+  created_at        DateTime @default(now())
+
+  project    Project    @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  competitor Competitor @relation(fields: [competitor_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@index([competitor_id])
+  @@map("competitor_keyword_discoveries")
+}

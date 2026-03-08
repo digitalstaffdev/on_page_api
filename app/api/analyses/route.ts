@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { getAuthSession, json, unauthorized } from "@/lib/api-utils";
 
+export const maxDuration = 10;
+
 export async function GET(req: NextRequest) {
   const session = await getAuthSession();
   if (!session) return unauthorized();

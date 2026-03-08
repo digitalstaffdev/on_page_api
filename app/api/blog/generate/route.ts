@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { getAuthSession, json, errorResponse, unauthorized } from "@/lib/api-utils";
 
+export const maxDuration = 60;
+
 const BLOG_DSN = process.env.BLOG_COMMANDER_DSN;
 const AUTHOR_ID = process.env.BLOG_COMMANDER_AUTHOR_ID;
 

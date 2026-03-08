@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { getAuthSession, json, unauthorized } from "@/lib/api-utils";
 
+export const maxDuration = 10;
+
 export async function GET() {
   const session = await getAuthSession();
   if (!session) return unauthorized();

@@ -1,6 +1,9 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
+import { inngest } from "@/lib/pipeline/inngest-client";
 import { getAuthSession, json, notFound, unauthorized, errorResponse } from "@/lib/api-utils";
+
+export const maxDuration = 60;
 
 export async function POST(
   _req: NextRequest,
@@ -20,11 +23,13 @@ export async function POST(
 
   await prisma.project.update({
     where: { id: params.id },
-    data: { status: "analyzing", progressPct: 0 },
+    data: { status: "analyzing", progress_pct: 0 },
   });
 
-  // TODO: Trigger Inngest pipeline event
-  // await inngest.send({ name: "pipeline/analysis.start", data: { projectId: params.id } });
+  await inngest.send({
+    name: "pipeline/analysis.start",
+    data: { projectId: params.id },
+  });
 
   return json({ message: "Analysis pipeline started" });
 }
